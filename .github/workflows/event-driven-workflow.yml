@@ -1,0 +1,94 @@
+name: Code Camp Event-Driven Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  lint_and_test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+      
+      - name: Run Tests
+        run: |
+          source venv/bin/activate
+          pytest
+
+  create_approval_issue:
+    runs-on: ubuntu-latest
+    needs: lint_and_test
+    if: github.ref == 'refs/heads/main' # Only run when PR is merged into main
+    steps:
+      - name: Create Approval Issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueTitle = "Approval Required: Apply Changes from Latest Merge";
+            const issueBody = `🚀 A new merge was made into 'main'.\n\nPlease review and approve the deployment of the latest changes.\n\n**Latest Commit:** ${{ github.sha }}\n\nComment \`/approve\` to proceed.`;
+
+            const { data: issues } = await github.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: ["approval"]
+            });
+
+            // Check if an issue already exists
+            if (issues.some(issue => issue.title === issueTitle)) {
+              console.log("Approval issue already exists. Skipping creation.");
+            } else {
+              await github.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ["approval"]
+              });
+              console.log("Approval issue created.");
+            }
+
+  wait_for_approval:
+    runs-on: ubuntu-latest
+    needs: create_approval_issue
+    if: github.event.issue && github.event.comment.body == '/approve'
+    steps:
+      - name: Approval Received
+        run: echo "Approval received. Proceeding with build and push."
+
+  build_docker:
+    runs-on: ubuntu-latest
+    needs: wait_for_approval
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: |
+          docker build -t codecamp-app .
+      
+      - name: Push Docker image
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker tag codecamp-app dwiabhis/codecamp:latest
+          docker push dwiabhis/codecamp:latest
