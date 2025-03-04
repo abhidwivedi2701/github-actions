@@ -11,7 +11,7 @@ on:
   workflow_dispatch: # Manual trigger
 
 jobs:
-  lint_and_test:
+  test:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -35,48 +35,28 @@ jobs:
           pytest
 
   create_approval_issue:
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      issues: write
     runs-on: ubuntu-latest
-    needs: lint_and_test
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Create Approval Issue
-        uses: actions/github-script@v7
+      - uses: trstringer/manual-approval@v1.9.1
+        name: manual-approval
         with:
-          github-token: ${{ secrets.TOKEN }}
-          script: |
-            const issueTitle = "Approval Required: Apply Changes from Latest Merge";
-            const issueBody = `🚀 A new merge was made into 'main'.\n\nPlease review and approve the deployment of the latest changes.\n\n**Latest Commit:** ${{ github.sha }}\n\nComment \`/approve\` to proceed.`;
-
-            const { data: issues } = await github.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "open",
-              labels: ["approval"]
-            });
-
-            if (issues.some(issue => issue.title === issueTitle)) {
-              console.log("Approval issue already exists. Skipping creation.");
-            } else {
-              await github.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: issueTitle,
-                body: issueBody,
-                labels: ["approval"]
-              });
-              console.log("Approval issue created.");
-            }
-
-  wait_for_approval:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'issue_comment' && github.event.comment.body == 'approve'
-    steps:
-      - name: Approval Received
-        run: echo "Approval received. Proceeding with build and push."
-
+          secret: ${{ secrets.TOKEN }}
+          approvers: abhidwivedi2701
+          issue-title: "Merge pull request"
+          issue-body: "Please approve or deny running terraform apply"
+          exclude-workflow-initiator-as-approver: false
+          minimum-approvals: 1
+          timeout-minutes: 15
   build_docker:
     runs-on: ubuntu-latest
-    needs: wait_for_approval
+    needs: create_approval_issue
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
