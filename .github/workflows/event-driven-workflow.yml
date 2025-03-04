@@ -42,7 +42,7 @@ jobs:
       issues: write
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     steps:
       - uses: trstringer/manual-approval@v1.9.1
         name: manual-approval
