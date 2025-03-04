@@ -42,7 +42,7 @@ jobs:
       - name: Create Approval Issue
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.TOKEN }}
           script: |
             const issueTitle = "Approval Required: Apply Changes from Latest Merge";
             const issueBody = `🚀 A new merge was made into 'main'.\n\nPlease review and approve the deployment of the latest changes.\n\n**Latest Commit:** ${{ github.sha }}\n\nComment \`/approve\` to proceed.`;
@@ -69,7 +69,7 @@ jobs:
 
   wait_for_approval:
     runs-on: ubuntu-latest
-    if: github.event_name == 'issue_comment' && github.event.comment.body == '/approve'
+    if: github.event_name == 'issue_comment' && github.event.comment.body == 'approve'
     steps:
       - name: Approval Received
         run: echo "Approval received. Proceeding with build and push."
