@@ -54,7 +54,7 @@ jobs:
           timeout-minutes: 15
   build_docker:
     runs-on: ubuntu-latest
-    needs: wait_for_approval
+    needs: create_approval_issue
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
